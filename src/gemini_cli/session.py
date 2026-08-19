@@ -66,37 +66,41 @@ async def run_prompt_stream(
     files: Optional[List[str]] = None,
     show_thoughts: bool = False,
 ):
-    if chat_session:
-        # Multi-turn chat
-        output = None
-        async for chunk in chat_session.send_message_stream(prompt, files=files):
-            output = chunk
-            if chunk.text_delta:
-                print(chunk.text_delta, end="", flush=True)
-        print()
-        if output:
-            if show_thoughts and getattr(output, "thoughts", None):
-                print_thoughts(output.thoughts)
-            print_images(getattr(output, "images", None))
-            save_last_session(chat_session.cid, model)
-        return output
-    else:
-        # Single-turn or new chat
-        output = None
-        async for chunk in client.generate_content_stream(prompt, files=files, model=model):
-            output = chunk
-            if chunk.text_delta:
-                print(chunk.text_delta, end="", flush=True)
-        print()
-        if output:
-            if show_thoughts and getattr(output, "thoughts", None):
-                print_thoughts(output.thoughts)
-            print_images(getattr(output, "images", None))
-            if output.metadata and len(output.metadata) > 0:
-                cid = output.metadata[0]
-                save_last_session(cid, model)
-                print_chat_metadata(cid)
-        return output
+    try:
+        if chat_session:
+            # Multi-turn chat
+            output = None
+            async for chunk in chat_session.send_message_stream(prompt, files=files):
+                output = chunk
+                if chunk.text_delta:
+                    print(chunk.text_delta, end="", flush=True)
+            print()
+            if output:
+                if show_thoughts and getattr(output, "thoughts", None):
+                    print_thoughts(output.thoughts)
+                print_images(getattr(output, "images", None))
+                save_last_session(chat_session.cid, model)
+            return output
+        else:
+            # Single-turn or new chat
+            output = None
+            async for chunk in client.generate_content_stream(prompt, files=files, model=model):
+                output = chunk
+                if chunk.text_delta:
+                    print(chunk.text_delta, end="", flush=True)
+            print()
+            if output:
+                if show_thoughts and getattr(output, "thoughts", None):
+                    print_thoughts(output.thoughts)
+                print_images(getattr(output, "images", None))
+                if output.metadata and len(output.metadata) > 0:
+                    cid = output.metadata[0]
+                    save_last_session(cid, model)
+                    print_chat_metadata(cid)
+            return output
+    except Exception as err:
+        print(f"\n{BOLD}\033[31mError:{RESET} {err}")
+        return None
 
 
 async def start_interactive_session(
@@ -173,18 +177,25 @@ async def start_interactive_session(
 
         if user_input == "/models":
             models = client.list_models() or []
-            print(f"\n{BOLD}Available Models:{RESET}")
+            print(f"\n{BOLD}Available Models on your account:{RESET}")
             for m in models:
-                active = " (active)" if m.model_name == current_model else ""
-                print(f"  • {BOLD}{m.model_name:<20}{RESET} {m.display_name}{CYAN}{active}{RESET}")
+                active = f" {CYAN}(active){RESET}" if m.model_name == current_model else ""
+                print(f"  • {BOLD}{m.model_name:<20}{RESET} {m.display_name}{active}")
             print()
             continue
 
         if user_input.startswith("/model ") or user_input.startswith("/switch "):
-            new_model = user_input.split(maxsplit=1)[1].strip()
-            current_model = new_model
-            chat = client.start_chat(model=current_model)
-            print(f"{DIM}Switched model to {current_model} and started fresh chat.{RESET}\n")
+            target_model_name = user_input.split(maxsplit=1)[1].strip()
+            try:
+                resolved = client.resolve_model(target_model_name)
+                current_model = resolved.model_name
+                chat = client.start_chat(model=current_model)
+                print(f"{GREEN}✓ Switched model to {BOLD}{resolved.model_name}{RESET} ({resolved.display_name}) and started fresh chat.{RESET}\n")
+            except ValueError as err:
+                models = client.list_models() or []
+                valid_names = ", ".join([m.model_name for m in models])
+                print(f"\033[31m✗ Model '{target_model_name}' is not available on your account.{RESET}")
+                print(f"  Available models: {BOLD}{valid_names}{RESET}\n")
             continue
 
         if user_input.startswith("/export "):
@@ -206,8 +217,8 @@ async def start_interactive_session(
         if user_input == "/help":
             print(f"\n{BOLD}Commands:{RESET}")
             print("  /clear           Start a new clean chat session")
-            print("  /models          List available Gemini models")
-            print("  /model <name>    Switch model (e.g. /model gemini-pro)")
+            print("  /models          List available Gemini models on your account")
+            print("  /model <name>    Switch model (e.g. /model gemini-flash, /model gemini-pro)")
             print("  /export <file>   Export chat transcript to markdown")
             print("  /exit, /quit     Exit interactive session\n")
             continue
@@ -216,3 +227,4 @@ async def start_interactive_session(
         print_assistant_header(current_model)
         await run_prompt_stream(client, user_input, chat_session=chat, model=current_model, show_thoughts=show_thoughts)
         print()
+
