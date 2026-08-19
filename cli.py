@@ -18,10 +18,11 @@ from curl_cffi import CurlFollow, CurlHttpVersion
 if (_src := str(Path(__file__).resolve().parent / "src")) not in sys.path:
     sys.path.insert(0, _src)
 
-from gemini_webapi import GeminiClient, logger, set_log_level
-from gemini_webapi.constants import BROWSER_TYPE
-from gemini_webapi.exceptions import AuthError
-from gemini_webapi.types.image import GeneratedImage, WebImage
+from gemini_cli.main import main
+
+if __name__ == "__main__":
+    main()
+
 
 # ---------------------------------------------------------------------------
 # region - Cookie helpers

@@ -1,0 +1,22 @@
+services:
+  gemini:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/pdrgrl/gemini-cli:latest
+    container_name: gemini-cli
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - GEMINI_COOKIE_PATH=/app/data/cookies
+      - GEMINI_SECURE_1PSID=${GEMINI_SECURE_1PSID:-}
+      - GEMINI_SECURE_1PSIDTS=${GEMINI_SECURE_1PSIDTS:-}
+    volumes:
+      - ./data:/app/data
+      - gemini_state:/root/.local/state/gemini
+    stdin_open: true
+    tty: true
+
+volumes:
+  gemini_state:

@@ -1,0 +1,218 @@
+import asyncio
+import json
+import os
+import sys
+from pathlib import Path
+from typing import Optional, List
+
+from gemini_webapi import GeminiClient
+from .formatter import (
+    BOLD,
+    CYAN,
+    GREEN,
+    DIM,
+    RESET,
+    print_banner,
+    print_user_prompt,
+    print_assistant_header,
+    print_thoughts,
+    print_images,
+    print_chat_metadata,
+)
+
+# Optional prompt_toolkit for beautiful interactive line editing and history
+try:
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.history import FileHistory
+    from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+    HAS_PROMPT_TOOLKIT = True
+except ImportError:
+    PromptSession = None
+    HAS_PROMPT_TOOLKIT = False
+
+STATE_DIR = Path.home() / ".local" / "state" / "gemini"
+STATE_FILE = STATE_DIR / "session_state.json"
+HISTORY_FILE = STATE_DIR / "cli_history"
+
+
+def _ensure_state_dir():
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def save_last_session(cid: str, model_name: Optional[str] = None):
+    _ensure_state_dir()
+    try:
+        STATE_FILE.write_text(
+            json.dumps({"last_cid": cid, "model": model_name}), encoding="utf-8"
+        )
+    except Exception:
+        pass
+
+
+def get_last_session() -> Optional[dict]:
+    if STATE_FILE.is_file():
+        try:
+            return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return None
+
+
+async def run_prompt_stream(
+    client: GeminiClient,
+    prompt: str,
+    chat_session=None,
+    model: Optional[str] = None,
+    files: Optional[List[str]] = None,
+    show_thoughts: bool = False,
+):
+    if chat_session:
+        # Multi-turn chat
+        output = None
+        async for chunk in chat_session.send_message_stream(prompt, files=files):
+            output = chunk
+            if chunk.text_delta:
+                print(chunk.text_delta, end="", flush=True)
+        print()
+        if output:
+            if show_thoughts and getattr(output, "thoughts", None):
+                print_thoughts(output.thoughts)
+            print_images(getattr(output, "images", None))
+            save_last_session(chat_session.cid, model)
+        return output
+    else:
+        # Single-turn or new chat
+        output = None
+        async for chunk in client.generate_content_stream(prompt, files=files, model=model):
+            output = chunk
+            if chunk.text_delta:
+                print(chunk.text_delta, end="", flush=True)
+        print()
+        if output:
+            if show_thoughts and getattr(output, "thoughts", None):
+                print_thoughts(output.thoughts)
+            print_images(getattr(output, "images", None))
+            if output.metadata and len(output.metadata) > 0:
+                cid = output.metadata[0]
+                save_last_session(cid, model)
+                print_chat_metadata(cid)
+        return output
+
+
+async def start_interactive_session(
+    client: GeminiClient,
+    initial_prompt: Optional[str] = None,
+    resume_cid: Optional[str] = None,
+    model: Optional[str] = None,
+    show_thoughts: bool = False,
+):
+    _ensure_state_dir()
+    print_banner()
+    print(f"{DIM}Commands: /clear, /models, /model <name>, /export <file>, /help, /exit{RESET}\n")
+
+    current_model = model
+    chat = None
+
+    if resume_cid:
+        try:
+            latest = await client.fetch_latest_chat_response(resume_cid)
+            if latest:
+                chat = client.start_chat(
+                    metadata=list(latest.metadata),
+                    cid=resume_cid,
+                    rcid=latest.rcid,
+                    model=current_model,
+                )
+            else:
+                chat = client.start_chat(cid=resume_cid, model=current_model)
+            print(f"{DIM}Resumed conversation: {resume_cid}{RESET}\n")
+        except Exception:
+            chat = client.start_chat(model=current_model)
+    else:
+        chat = client.start_chat(model=current_model)
+
+    # Initialize prompt_toolkit if available
+    pt_session = None
+    if HAS_PROMPT_TOOLKIT:
+        pt_session = PromptSession(
+            history=FileHistory(str(HISTORY_FILE)),
+            auto_suggest=AutoSuggestFromHistory(),
+        )
+
+    # If an initial prompt was given, execute it first
+    if initial_prompt:
+        print_user_prompt(initial_prompt)
+        print_assistant_header(current_model)
+        await run_prompt_stream(client, initial_prompt, chat_session=chat, model=current_model, show_thoughts=show_thoughts)
+        print()
+
+    # Main REPL Loop
+    while True:
+        try:
+            if pt_session:
+                user_input = await pt_session.prompt_async("> ")
+            else:
+                user_input = input(f"{BOLD}{GREEN}>{RESET} ")
+        except (KeyboardInterrupt, EOFError):
+            print(f"\n{DIM}Exiting session.{RESET}")
+            break
+
+        user_input = user_input.strip()
+        if not user_input:
+            continue
+
+        # Handle commands
+        if user_input.lower() in ["/exit", "/quit", "exit", "quit"]:
+            print(f"{DIM}Goodbye!{RESET}")
+            break
+
+        if user_input == "/clear":
+            chat = client.start_chat(model=current_model)
+            print(f"{DIM}✨ Started fresh conversation.{RESET}\n")
+            continue
+
+        if user_input == "/models":
+            models = client.list_models() or []
+            print(f"\n{BOLD}Available Models:{RESET}")
+            for m in models:
+                active = " (active)" if m.model_name == current_model else ""
+                print(f"  • {BOLD}{m.model_name:<20}{RESET} {m.display_name}{CYAN}{active}{RESET}")
+            print()
+            continue
+
+        if user_input.startswith("/model ") or user_input.startswith("/switch "):
+            new_model = user_input.split(maxsplit=1)[1].strip()
+            current_model = new_model
+            chat = client.start_chat(model=current_model)
+            print(f"{DIM}Switched model to {current_model} and started fresh chat.{RESET}\n")
+            continue
+
+        if user_input.startswith("/export "):
+            target_path = Path(user_input.split(maxsplit=1)[1].strip())
+            try:
+                history = await client.read_chat(chat.cid)
+                if history:
+                    lines = [f"# Chat History ({chat.cid})\n"]
+                    for turn in history.turns:
+                        lines.append(f"### {turn.role.upper()}\n\n{turn.text}\n")
+                    target_path.write_text("\n".join(lines), encoding="utf-8")
+                    print(f"{GREEN}Exported conversation to {target_path}{RESET}\n")
+                else:
+                    print(f"{DIM}No turns found in this chat.{RESET}\n")
+            except Exception as err:
+                print(f"{RED}Error exporting: {err}{RESET}\n")
+            continue
+
+        if user_input == "/help":
+            print(f"\n{BOLD}Commands:{RESET}")
+            print("  /clear           Start a new clean chat session")
+            print("  /models          List available Gemini models")
+            print("  /model <name>    Switch model (e.g. /model gemini-pro)")
+            print("  /export <file>   Export chat transcript to markdown")
+            print("  /exit, /quit     Exit interactive session\n")
+            continue
+
+        # Normal prompt execution
+        print_assistant_header(current_model)
+        await run_prompt_stream(client, user_input, chat_session=chat, model=current_model, show_thoughts=show_thoughts)
+        print()

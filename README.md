@@ -756,64 +756,74 @@ set_log_level("DEBUG")
 
 ## CLI Tool
 
-A standalone CLI (`cli.py`) is included for interacting with Gemini from the terminal. It supports single-turn questions, multi-turn chat, deep research, image download, and account diagnostics.
+A modern, interactive CLI (`gemini`) is included for pairing with Gemini right from your terminal. It supports interactive REPL sessions, piped inputs, single-turn and multi-turn conversations, autonomous deep research, and containerized deployment.
+
+### Installation
+
+```sh
+# Via pipx (recommended for standalone CLI usage)
+pipx install "gemini-webapi[cli]"
+
+# Or direct from git
+pipx install "git+https://github.com/pdrgrl/Gemini-API.git#egg=gemini-webapi[cli]"
+```
+
+### Docker / Containerized Quickstart
+
+```sh
+# 1. Clone the repository
+git clone https://github.com/pdrgrl/Gemini-API.git gemini-cli
+cd gemini-cli
+
+# 2. Add your cookies in .env
+cp .env.example .env
+
+# 3. Launch interactive CLI
+./bin/gemini
+```
 
 ### Cookie Setup
 
-Export your cookies from [gemini.google.com](https://gemini.google.com) and save them as a JSON file. The CLI supports multiple formats:
+Cookies can be configured via:
+1. `~/.config/gemini/cookies.json` or `~/.gemini/cookies.json`
+2. `.env` file (`GEMINI_SECURE_1PSID` and `GEMINI_SECURE_1PSIDTS`)
+3. CLI argument `--cookies-json <path>`
 
 ```json
-{ "__Secure-1PSID": "value...", "__Secure-1PSIDTS": "value..." }
+{
+  "__Secure-1PSID": "your_secure_1psid_here",
+  "__Secure-1PSIDTS": "your_secure_1psidts_here"
+}
 ```
 
-You can also use a browser cookie extension export (array-of-objects format is supported).
-
-> [!NOTE]
->
-> The CLI automatically persists updated cookies back to the JSON file after each run. Use `--no-persist` to disable this behavior.
-
-### CLI Commands
-
-**Global options** (placed before the subcommand):
+### CLI Usage & Examples
 
 ```sh
---cookies-json PATH    Path to cookies JSON file (required)
---proxy URL            Proxy URL (or uses HTTPS_PROXY env)
---model NAME           Model name, alias or id (default: your account's default model)
---verbose              Enable debug logging
---no-persist           Don't update cookies file after run
---request-timeout SEC  HTTP timeout in seconds (default: 300)
-```
+# 1. Start interactive REPL session (like agy)
+gemini
 
-**Available commands:**
+# 2. Ask a single question (live streaming)
+gemini "Explain WebSockets vs Server-Sent Events"
 
-```sh
-# Ask a single question (streams by default)
-python cli.py --cookies-json cookies.json ask "What is quantum computing?"
+# 3. Continue the most recent conversation (-c)
+gemini -c "Give me code examples for that"
 
-# Ask with image input
-python cli.py --cookies-json cookies.json ask --image photo.jpg "Describe this"
+# 4. Pipe stdin directly into Gemini
+git diff | gemini "Write a clear, conventional commit message"
+cat build.log | gemini "What caused this build failure?"
 
-# Non-streaming mode
-python cli.py --cookies-json cookies.json ask --no-stream "Hello"
+# 5. Attach files or images
+gemini -f schema.sql "Analyze this database schema for performance bottlenecks"
 
-# Continue a conversation (chat ID from previous output)
-python cli.py --cookies-json cookies.json reply c_abc123 "Tell me more"
+# 6. Select model
+gemini -m gemini-pro "Solve this complex reasoning puzzle"
 
-# List your chat history
-python cli.py --cookies-json cookies.json list
+# 7. List available models discovered on your account
+gemini models
 
-# Read a specific chat conversation
-python cli.py --cookies-json cookies.json read c_abc123
-
-# List the models your account can use
-python cli.py --cookies-json cookies.json models
-
-# Download a generated image
-python cli.py --cookies-json cookies.json download "https://..." -o output.png
-
-# Account diagnostics (status, quotas, usage limits, available models)
-python cli.py --cookies-json cookies.json inspect
+# 8. List and inspect chat history
+gemini list
+gemini read c_abc123
 ```
 
 ### Deep Research Workflow

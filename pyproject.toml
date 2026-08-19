@@ -27,20 +27,26 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 browser = ["browser-cookie3"]
+cli = ["prompt-toolkit>=3.0.0", "rich>=13.0.0"]
 dev = ["pyright", "ruff", "ty"]
+
+[project.scripts]
+gemini = "gemini_cli.main:main"
+gemini-cli = "gemini_cli.main:main"
 
 [dependency-groups]
 dev = [
-  "gemini-webapi[browser,dev]", # browser extra keeps the optional import type-checkable
+  "gemini-webapi[browser,cli,dev]", # browser and cli extras keep optional imports type-checkable
 ]
 
 [project.urls]
-Repository = "https://github.com/HanaokaYuzu/Gemini-API"
-Issues = "https://github.com/HanaokaYuzu/Gemini-API/issues"
+Repository = "https://github.com/pdrgrl/Gemini-API"
+Issues = "https://github.com/pdrgrl/Gemini-API/issues"
+Upstream = "https://github.com/HanaokaYuzu/Gemini-API"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["gemini_webapi"]
+include = ["gemini_webapi*", "gemini_cli*"]
 
 [tool.setuptools_scm]
 version_scheme = "post-release"
