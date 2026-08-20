@@ -51,7 +51,6 @@ def print_user_prompt(text: str):
     if not text:
         return
     if HAS_RICH and console and sys.stdout.isatty():
-        console.print()
         console.print(
             Panel(
                 f"[bold bright_white]{text.strip()}[/bold bright_white]",
@@ -62,21 +61,20 @@ def print_user_prompt(text: str):
                 expand=False,
             )
         )
-        console.print()
     else:
-        print(f"\n{BOLD}{CYAN}┌── YOU ──────────────────────────────────────────{RESET}")
+        print(f"{BOLD}{CYAN}┌── YOU ──────────────────────────────────────────{RESET}")
         print(f"{BOLD}{CYAN}│{RESET} {BOLD}{text.strip()}{RESET}")
-        print(f"{BOLD}{CYAN}└────────────────────────────────────────────────{RESET}\n")
+        print(f"{BOLD}{CYAN}└────────────────────────────────────────────────{RESET}")
 
 
 def print_assistant_header(model_name: Optional[str] = None):
     """Render Gemini assistant header with clear spacing."""
     suffix = f" [dim]({model_name})[/dim]" if model_name else ""
     if HAS_RICH and console and sys.stdout.isatty():
-        console.print(f"[bold bright_magenta]✨ Gemini[/bold bright_magenta]{suffix}:\n")
+        console.print(f"[bold bright_magenta]✨ Gemini[/bold bright_magenta]{suffix}:")
     else:
         suffix_str = f" {DIM}({model_name}){RESET}" if model_name else ""
-        print(f"{BOLD}{MAGENTA}✨ Gemini{RESET}{suffix_str}:\n")
+        print(f"{BOLD}{MAGENTA}✨ Gemini{RESET}{suffix_str}:")
 
 
 def print_markdown(text: str):

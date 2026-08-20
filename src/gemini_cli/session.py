@@ -145,9 +145,10 @@ async def start_interactive_session(
     # If an initial prompt was given, execute it first
     if initial_prompt:
         print_user_prompt(initial_prompt)
+        print()
         print_assistant_header(current_model)
         await run_prompt_stream(client, initial_prompt, chat_session=chat, model=current_model, show_thoughts=show_thoughts, raw=raw)
-        print_turn_divider()
+        print()
 
     # Main REPL Loop
     while True:

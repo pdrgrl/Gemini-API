@@ -216,6 +216,7 @@ async def async_main():
         # Single prompt execution
         if not args.raw:
             print_user_prompt(prompt_str)
+            print()
             print_assistant_header(args.model)
 
         if target_cid:
