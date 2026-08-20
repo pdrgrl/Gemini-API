@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from gemini_webapi import GeminiClient, set_log_level
 from .auth import discover_cookies, get_client, persist_cookies
-from .formatter import BOLD, CYAN, GREEN, DIM, RED, RESET
+from .formatter import BOLD, CYAN, GREEN, DIM, RED, RESET, print_markdown
 from .session import (
     get_last_session,
     run_prompt_stream,
@@ -46,6 +46,7 @@ Examples:
     parser.add_argument("-m", "--model", help="Specify Gemini model (e.g. gemini-pro, gemini-flash)")
     parser.add_argument("-f", "--file", dest="files", action="append", help="Attach a file or image (repeatable)")
     parser.add_argument("--thoughts", action="store_true", help="Display the model's thinking process")
+    parser.add_argument("--raw", action="store_true", help="Output raw text without rich markdown formatting")
     parser.add_argument("--no-stream", action="store_true", help="Wait for full response before printing")
 
     # Auth & Network options
@@ -142,7 +143,12 @@ async def async_main():
                 print(f"\n{BOLD}Transcript for {args.chat_id}:{RESET}\n")
                 for turn in history.turns:
                     role_color = GREEN if turn.role.lower() == "user" else CYAN
-                    print(f"{role_color}[{turn.role.upper()}]{RESET}\n{turn.text}\n")
+                    print(f"{role_color}{BOLD}[{turn.role.upper()}]{RESET}")
+                    if args.raw:
+                        print(turn.text)
+                    else:
+                        print_markdown(turn.text)
+                    print()
             else:
                 print(f"{RED}No conversation found for ID: {args.chat_id}{RESET}")
             return
@@ -192,6 +198,7 @@ async def async_main():
                 resume_cid=target_cid,
                 model=args.model,
                 show_thoughts=args.thoughts,
+                raw=args.raw,
             )
             return
 
@@ -214,6 +221,7 @@ async def async_main():
                 model=args.model,
                 files=args.files,
                 show_thoughts=args.thoughts,
+                raw=args.raw,
             )
         else:
             await run_prompt_stream(
@@ -222,6 +230,7 @@ async def async_main():
                 model=args.model,
                 files=args.files,
                 show_thoughts=args.thoughts,
+                raw=args.raw,
             )
 
     finally:

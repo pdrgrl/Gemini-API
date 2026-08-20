@@ -21,6 +21,7 @@ try:
     from rich.text import Text
     from rich.syntax import Syntax
     from rich.theme import Theme
+    from rich.live import Live
 
     custom_theme = Theme({
         "info": "dim cyan",
@@ -54,10 +55,66 @@ def print_user_prompt(text: str):
 def print_assistant_header(model_name: Optional[str] = None):
     suffix = f" [dim]({model_name})[/dim]" if model_name else ""
     if HAS_RICH and console:
-        console.print(f"[bold cyan]Gemini[/bold cyan]{suffix}: ", end="")
+        console.print(f"[bold cyan]Gemini[/bold cyan]{suffix}:")
     else:
         suffix_str = f" {DIM}({model_name}){RESET}" if model_name else ""
-        print(f"{BOLD}{CYAN}Gemini{RESET}{suffix_str}: ", end="", flush=True)
+        print(f"{BOLD}{CYAN}Gemini{RESET}{suffix_str}:")
+
+
+def print_markdown(text: str):
+    """Render full markdown text with rich styling (syntax highlighting, tables, lists)."""
+    if not text:
+        return
+    if HAS_RICH and console and sys.stdout.isatty():
+        console.print(Markdown(text, code_theme="monokai"))
+    else:
+        print(text)
+
+
+class MarkdownStreamer:
+    """
+    Real-time streamer that transforms and renders Markdown live in the terminal.
+    Falls back to raw token printing when piping (not a TTY) or if raw mode is requested.
+    """
+
+    def __init__(self, raw: bool = False):
+        self.raw = raw or not sys.stdout.isatty() or not HAS_RICH
+        self.buffer = ""
+        self.live = None
+
+    def __enter__(self):
+        if not self.raw and console:
+            self.live = Live(
+                Markdown("", code_theme="monokai"),
+                console=console,
+                refresh_per_second=12,
+                auto_refresh=False,
+                transient=False,
+            )
+            self.live.__enter__()
+        return self
+
+    def update(self, delta: str):
+        if not delta:
+            return
+        self.buffer += delta
+        if self.raw:
+            print(delta, end="", flush=True)
+        elif self.live:
+            self.live.update(Markdown(self.buffer, code_theme="monokai"), refresh=True)
+
+    def finish(self):
+        if self.raw:
+            print()
+        elif self.live:
+            self.live.update(Markdown(self.buffer, code_theme="monokai"), refresh=True)
+            self.live.__exit__(None, None, None)
+            self.live = None
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.live:
+            self.live.__exit__(exc_type, exc_val, exc_tb)
+            self.live = None
 
 
 def print_thoughts(thoughts: Optional[str]):

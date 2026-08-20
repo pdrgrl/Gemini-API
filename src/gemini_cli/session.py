@@ -18,6 +18,8 @@ from .formatter import (
     print_thoughts,
     print_images,
     print_chat_metadata,
+    print_markdown,
+    MarkdownStreamer,
 )
 
 # Optional prompt_toolkit for beautiful interactive line editing and history
@@ -65,39 +67,34 @@ async def run_prompt_stream(
     model: Optional[str] = None,
     files: Optional[List[str]] = None,
     show_thoughts: bool = False,
+    raw: bool = False,
 ):
     try:
-        if chat_session:
-            # Multi-turn chat
-            output = None
-            async for chunk in chat_session.send_message_stream(prompt, files=files):
-                output = chunk
-                if chunk.text_delta:
-                    print(chunk.text_delta, end="", flush=True)
-            print()
-            if output:
-                if show_thoughts and getattr(output, "thoughts", None):
-                    print_thoughts(output.thoughts)
-                print_images(getattr(output, "images", None))
+        output = None
+        with MarkdownStreamer(raw=raw) as streamer:
+            if chat_session:
+                async for chunk in chat_session.send_message_stream(prompt, files=files):
+                    output = chunk
+                    if chunk.text_delta:
+                        streamer.update(chunk.text_delta)
+            else:
+                async for chunk in client.generate_content_stream(prompt, files=files, model=model):
+                    output = chunk
+                    if chunk.text_delta:
+                        streamer.update(chunk.text_delta)
+            streamer.finish()
+
+        if output:
+            if show_thoughts and getattr(output, "thoughts", None):
+                print_thoughts(output.thoughts)
+            print_images(getattr(output, "images", None))
+            if chat_session:
                 save_last_session(chat_session.cid, model)
-            return output
-        else:
-            # Single-turn or new chat
-            output = None
-            async for chunk in client.generate_content_stream(prompt, files=files, model=model):
-                output = chunk
-                if chunk.text_delta:
-                    print(chunk.text_delta, end="", flush=True)
-            print()
-            if output:
-                if show_thoughts and getattr(output, "thoughts", None):
-                    print_thoughts(output.thoughts)
-                print_images(getattr(output, "images", None))
-                if output.metadata and len(output.metadata) > 0:
-                    cid = output.metadata[0]
-                    save_last_session(cid, model)
-                    print_chat_metadata(cid)
-            return output
+            elif output.metadata and len(output.metadata) > 0:
+                cid = output.metadata[0]
+                save_last_session(cid, model)
+                print_chat_metadata(cid)
+        return output
     except Exception as err:
         print(f"\n{BOLD}\033[31mError:{RESET} {err}")
         return None
@@ -109,6 +106,7 @@ async def start_interactive_session(
     resume_cid: Optional[str] = None,
     model: Optional[str] = None,
     show_thoughts: bool = False,
+    raw: bool = False,
 ):
     _ensure_state_dir()
     print_banner()
@@ -147,7 +145,7 @@ async def start_interactive_session(
     if initial_prompt:
         print_user_prompt(initial_prompt)
         print_assistant_header(current_model)
-        await run_prompt_stream(client, initial_prompt, chat_session=chat, model=current_model, show_thoughts=show_thoughts)
+        await run_prompt_stream(client, initial_prompt, chat_session=chat, model=current_model, show_thoughts=show_thoughts, raw=raw)
         print()
 
     # Main REPL Loop
@@ -225,6 +223,6 @@ async def start_interactive_session(
 
         # Normal prompt execution
         print_assistant_header(current_model)
-        await run_prompt_stream(client, user_input, chat_session=chat, model=current_model, show_thoughts=show_thoughts)
+        await run_prompt_stream(client, user_input, chat_session=chat, model=current_model, show_thoughts=show_thoughts, raw=raw)
         print()
 
