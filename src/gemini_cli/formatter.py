@@ -22,13 +22,14 @@ try:
     from rich.syntax import Syntax
     from rich.theme import Theme
     from rich.live import Live
+    from rich.rule import Rule
 
     custom_theme = Theme({
         "info": "dim cyan",
         "warning": "yellow",
         "error": "bold red",
         "user": "bold green",
-        "assistant": "bold cyan",
+        "assistant": "bold magenta",
         "thought": "italic dim",
     })
     console = Console(theme=custom_theme)
@@ -40,25 +41,42 @@ except ImportError:
 
 def print_banner():
     if HAS_RICH and console:
-        console.print("[bold cyan]✨ Gemini CLI[/bold cyan] [dim]• An intelligent assistant for your terminal[/dim]")
+        console.print("\n[bold cyan]✨ Gemini CLI[/bold cyan] [dim]• An intelligent assistant for your terminal[/dim]")
     else:
-        print(f"{BOLD}{CYAN}✨ Gemini CLI{RESET} {DIM}• An intelligent assistant for your terminal{RESET}")
+        print(f"\n{BOLD}{CYAN}✨ Gemini CLI{RESET} {DIM}• An intelligent assistant for your terminal{RESET}")
 
 
 def print_user_prompt(text: str):
-    if HAS_RICH and console:
-        console.print(f"\n[bold green]You:[/bold green] {text}")
+    """Render user prompt with high visual prominence and clear framing."""
+    if not text:
+        return
+    if HAS_RICH and console and sys.stdout.isatty():
+        console.print()
+        console.print(
+            Panel(
+                f"[bold bright_white]{text.strip()}[/bold bright_white]",
+                title="[bold black on #38bdf8] YOU [/bold black on #38bdf8]",
+                title_align="left",
+                border_style="#0284c7",
+                padding=(0, 2),
+                expand=False,
+            )
+        )
+        console.print()
     else:
-        print(f"\n{BOLD}{GREEN}You:{RESET} {text}")
+        print(f"\n{BOLD}{CYAN}┌── YOU ──────────────────────────────────────────{RESET}")
+        print(f"{BOLD}{CYAN}│{RESET} {BOLD}{text.strip()}{RESET}")
+        print(f"{BOLD}{CYAN}└────────────────────────────────────────────────{RESET}\n")
 
 
 def print_assistant_header(model_name: Optional[str] = None):
+    """Render Gemini assistant header with clear spacing."""
     suffix = f" [dim]({model_name})[/dim]" if model_name else ""
-    if HAS_RICH and console:
-        console.print(f"[bold cyan]Gemini[/bold cyan]{suffix}:")
+    if HAS_RICH and console and sys.stdout.isatty():
+        console.print(f"[bold bright_magenta]✨ Gemini[/bold bright_magenta]{suffix}:\n")
     else:
         suffix_str = f" {DIM}({model_name}){RESET}" if model_name else ""
-        print(f"{BOLD}{CYAN}Gemini{RESET}{suffix_str}:")
+        print(f"{BOLD}{MAGENTA}✨ Gemini{RESET}{suffix_str}:\n")
 
 
 def print_markdown(text: str):
@@ -161,3 +179,11 @@ def print_chat_metadata(cid: Optional[str]):
         console.print(f"\n[dim]Chat ID: {cid}[/dim]")
     else:
         print(f"\n{DIM}Chat ID: {cid}{RESET}")
+
+
+def print_turn_divider():
+    """Print subtle divider between conversation turns."""
+    if HAS_RICH and console and sys.stdout.isatty():
+        console.print("\n" + "[dim]" + "─" * 60 + "[/dim]\n")
+    else:
+        print(f"\n{DIM}------------------------------------------------------------{RESET}\n")

@@ -7,7 +7,18 @@ from typing import List, Optional
 
 from gemini_webapi import GeminiClient, set_log_level
 from .auth import discover_cookies, get_client, persist_cookies
-from .formatter import BOLD, CYAN, GREEN, DIM, RED, RESET, print_markdown
+from .formatter import (
+    BOLD,
+    CYAN,
+    GREEN,
+    DIM,
+    RED,
+    RESET,
+    print_markdown,
+    print_user_prompt,
+    print_assistant_header,
+    print_turn_divider,
+)
 from .session import (
     get_last_session,
     run_prompt_stream,
@@ -203,6 +214,10 @@ async def async_main():
             return
 
         # Single prompt execution
+        if not args.raw:
+            print_user_prompt(prompt_str)
+            print_assistant_header(args.model)
+
         if target_cid:
             latest = await client.fetch_latest_chat_response(target_cid)
             if latest:
@@ -232,6 +247,9 @@ async def async_main():
                 show_thoughts=args.thoughts,
                 raw=args.raw,
             )
+
+        if not args.raw:
+            print_turn_divider()
 
     finally:
         if cookie_path and not args.no_persist:

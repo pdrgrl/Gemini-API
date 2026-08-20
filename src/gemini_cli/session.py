@@ -19,6 +19,7 @@ from .formatter import (
     print_images,
     print_chat_metadata,
     print_markdown,
+    print_turn_divider,
     MarkdownStreamer,
 )
 
@@ -146,7 +147,7 @@ async def start_interactive_session(
         print_user_prompt(initial_prompt)
         print_assistant_header(current_model)
         await run_prompt_stream(client, initial_prompt, chat_session=chat, model=current_model, show_thoughts=show_thoughts, raw=raw)
-        print()
+        print_turn_divider()
 
     # Main REPL Loop
     while True:
@@ -222,7 +223,9 @@ async def start_interactive_session(
             continue
 
         # Normal prompt execution
+        print()
         print_assistant_header(current_model)
         await run_prompt_stream(client, user_input, chat_session=chat, model=current_model, show_thoughts=show_thoughts, raw=raw)
-        print()
+        print_turn_divider()
+
 
